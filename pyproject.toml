@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ccmux"
+version = "0.1.0"
+description = "Map terminal-multiplexer panes to the Claude Code sessions running in them, and rebuild them after a reboot."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+keywords = ["claude", "claude-code", "zellij", "tmux", "session", "recovery"]
+classifiers = [
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Topic :: Utilities",
+]
+dependencies = []
+
+[project.scripts]
+ccmux = "ccmux.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/ali-wego/ccmux"
+
+[tool.setuptools.packages.find]
+where = ["src"]
