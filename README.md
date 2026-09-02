@@ -47,18 +47,69 @@ Or just copy the package and run `python3 -m panemap`.
 | `panemap rescue` | Captures every Claude pane's screen — the only backup for a session whose transcript is already deleted. |
 | `panemap sessions` | Browses recent transcripts with a description each, whether or not a pane holds them. A readable `claude --resume` picker. |
 
-Run `panemap save` before you reboot, then afterwards:
+## Surviving a reboot
+
+### Before
+
+Run this from inside a multiplexer pane — from a plain terminal there are no
+panes to find:
 
 ```sh
-zellij -n ~/.panemap/restore.kdl      # zellij
-sh ~/.panemap/restore.sh              # tmux
+panemap save --rescue
+panemap doctor
 ```
 
-Every pane comes back with its resume command **typed but not run**, so
-restoring twelve panes does not start twelve conversations at once. Press Enter
-in the ones you want.
+`save` writes everything to `~/.panemap/`, in your home directory so a reboot
+cannot clear it. `doctor` tells you if anything will not survive; act on it now,
+because after the reboot it is too late. In particular, a session whose
+transcript has already been deleted exists only inside its running process —
+`/export` in that pane is the only way to keep the history.
 
-### Naming your sessions
+### After
+
+```sh
+zellij -n ~/.panemap/restore.kdl -s work   # zellij  (-s names the session)
+sh ~/.panemap/restore.sh                   # tmux    (then: tmux attach -t panemap)
+```
+
+Your tabs come back with **nothing running**. Under zellij each Claude pane shows
+its command waiting:
+
+```
+Waiting to run: claude --resume 6f1a20c4-8d3e-4b17-9a55-0c2d81e4f7ab
+```
+
+Under tmux the same command is typed at the prompt, unsent.
+
+Either way, press **Enter** in the tabs you want. That is the point: restoring
+twelve panes does not start twelve conversations, and a very large transcript
+only costs you time if you ask for it.
+
+Some panes come back as an ordinary shell instead, on purpose — either the
+session's transcript is gone, or another pane holds the same session and drove
+it more recently. `panemap list` says which.
+
+Then confirm and re-snapshot:
+
+```sh
+panemap list           # every pane should show the session id it had before
+panemap save --rescue  # the old file describes the old session; refresh it
+```
+
+### Do not use your multiplexer's own session restore
+
+Both zellij and tmux resurrection tools offer to bring the old session back, and
+it looks like the obvious move. It is the one thing that will quietly lose work.
+They restore the command each pane was *launched* with — and a pane launched as a
+bare `claude` comes back as a bare `claude`, which starts a **new, empty
+conversation** with no error to tell you it happened. Panes that were launched
+with an explicit `--resume` do come back correctly, so you get a confusing mix.
+
+`panemap`'s restore file carries the session id for every pane, which is the
+whole reason it exists. Keep the old session around as a fallback until you are
+satisfied, then discard it.
+
+## Naming your sessions
 
 Without a name, the description falls back to the conversation's opening
 message — often not what the conversation became. The best fix is Claude Code's
