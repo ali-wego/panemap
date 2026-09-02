@@ -50,9 +50,25 @@ class Row:
         return bool(self.transcript and self.session_id)
 
     @property
+    def title(self) -> Optional[str]:
+        """A name someone deliberately gave this session, if any."""
+        if self.transcript and self.transcript.title:
+            return self.transcript.title
+        return self.registry.chosen_name if self.registry else None
+
+    @property
     def description(self) -> str:
+        """Best available label, most deliberate first.
+
+        A local note wins because it is written for this listing. Then the
+        session's own name, which the user set with ``claude -n`` and which
+        Claude Code shows in its own picker too. The opening message is the
+        fallback, and it is often not what the conversation became.
+        """
         if self.note:
             return self.note
+        if self.title:
+            return self.title
         if self.transcript and self.transcript.opened_with:
             return self.transcript.opened_with
         return "(no transcript on disk)"
@@ -237,7 +253,7 @@ def diagnose(rows: List[Row], root: Optional[str] = None) -> List[Finding]:
                 "still holds this conversation."
                 % (row.pane.tab, row.session_id),
                 "Run /export in that pane before shutting down, and keep a "
-                "screen capture with `ccmux rescue`.",
+                "screen capture with `panemap rescue`.",
             )
         )
 

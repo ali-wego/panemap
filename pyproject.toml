@@ -3,7 +3,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ccmux"
+name = "panemap"
 version = "0.1.0"
 description = "Map terminal-multiplexer panes to the Claude Code sessions running in them, and rebuild them after a reboot."
 readme = "README.md"
@@ -20,10 +20,10 @@ classifiers = [
 dependencies = []
 
 [project.scripts]
-ccmux = "ccmux.cli:main"
+panemap = "panemap.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/ali-wego/ccmux"
+Homepage = "https://github.com/ali-wego/panemap"
 
 [tool.setuptools.packages.find]
 where = ["src"]

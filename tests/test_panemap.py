@@ -1,4 +1,4 @@
-"""Tests for ccmux. Standard library only: `python3 -m unittest discover tests`."""
+"""Tests for panemap. Standard library only: `python3 -m unittest discover tests`."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from ccmux import claude, core, mux, proc, render, restore, verify  # noqa: E402
+from panemap import claude, core, mux, proc, render, restore, verify  # noqa: E402
 
 # A trimmed but structurally faithful `zellij action dump-layout`: a
 # layout-level cwd making pane cwds relative, a non-Claude command pane, a
@@ -83,7 +83,7 @@ class FakeClaudeHome:
     """A throwaway ~/.claude containing registry entries and transcripts."""
 
     def __init__(self):
-        self.root = tempfile.mkdtemp(prefix="ccmux-home-")
+        self.root = tempfile.mkdtemp(prefix="panemap-home-")
         os.makedirs(os.path.join(self.root, "sessions"))
         os.makedirs(os.path.join(self.root, "projects"))
 
@@ -173,6 +173,48 @@ class TranscriptTests(unittest.TestCase):
         path = self.home.transcript("bbbb", "/some/../weird/./path")
         self.assertEqual(claude.find_transcript("bbbb", self.home.root), path)
         self.assertIsNone(claude.find_transcript("nope", self.home.root))
+
+    def test_custom_title_is_read_from_the_transcript(self):
+        # `claude -n <name>` records a custom-title entry; nothing writes one
+        # unless a name was actually chosen, which is what makes it reliable.
+        path = os.path.join(self.home.root, "titled.jsonl")
+        with open(path, "w") as fh:
+            fh.write(json.dumps({"type": "custom-title",
+                                 "customTitle": "checkout rewrite"}) + "\n")
+            for entry in transcript_lines("aaaa", "main", "first thing here", "last"):
+                fh.write(json.dumps(entry) + "\n")
+        scanned = claude.scan_transcript(path)
+        self.assertEqual(scanned.title, "checkout rewrite")
+        self.assertEqual(scanned.opened_with, "first thing here")
+
+    def test_untitled_transcript_has_no_title(self):
+        path = self.home.transcript("aaaa", "/work/repo")
+        self.assertIsNone(claude.scan_transcript(path).title)
+
+    def test_a_rename_late_in_the_conversation_is_still_found(self):
+        # A mid-conversation rename lands far past the head window, so the
+        # tail scan has to catch it.
+        path = os.path.join(self.home.root, "renamed.jsonl")
+        with open(path, "w") as fh:
+            for entry in transcript_lines("aaaa", "main", "opening message", "x"):
+                fh.write(json.dumps(entry) + "\n")
+            for i in range(claude.TITLE_WINDOW + 50):
+                fh.write(json.dumps({"type": "assistant", "message":
+                                     {"content": "filler %d" % i}}) + "\n")
+            fh.write(json.dumps({"type": "custom-title",
+                                 "customTitle": "renamed later"}) + "\n")
+        scanned = claude.scan_transcript(path)
+        self.assertEqual(scanned.title, "renamed later")
+        self.assertEqual(scanned.opened_with, "opening message")
+
+    def test_derived_registry_names_are_not_treated_as_chosen(self):
+        self.home.registry(10, "aaaa", "/work/repo",
+                           name="myproject-0a", nameSource="derived")
+        self.home.registry(11, "bbbb", "/work/repo",
+                           name="checkout work", nameSource="user")
+        entries = claude.read_registry(self.home.root)
+        self.assertIsNone(entries[10].chosen_name)
+        self.assertEqual(entries[11].chosen_name, "checkout work")
 
     def test_cleanup_period_defaults_and_overrides(self):
         self.assertEqual(claude.cleanup_period_days(self.home.root), 30)
@@ -456,7 +498,7 @@ class TmuxTests(unittest.TestCase):
     def setUp(self):
         self.home = FakeClaudeHome()
         self.addCleanup(self.home.close)
-        self.bin = tempfile.mkdtemp(prefix="ccmux-bin-")
+        self.bin = tempfile.mkdtemp(prefix="panemap-bin-")
         self.addCleanup(shutil.rmtree, self.bin, True)
 
     def install_stub(self, payload):
@@ -587,6 +629,26 @@ class RenderTests(unittest.TestCase):
         body = render.markdown(self.rows, self.snapshot)
         self.assertIn("uses a \\| pipe", body)
 
+    def test_session_name_beats_the_opening_message_as_description(self):
+        home = FakeClaudeHome()
+        self.addCleanup(home.close)
+        sid = "11111111-1111-1111-1111-111111111111"
+        home.registry(900, sid, "/work/repo")
+        directory = os.path.join(home.root, "projects", claude.project_slug("/work/repo"))
+        os.makedirs(directory, exist_ok=True)
+        with open(os.path.join(directory, sid + ".jsonl"), "w") as fh:
+            fh.write(json.dumps({"type": "custom-title",
+                                 "customTitle": "checkout rewrite"}) + "\n")
+            for entry in transcript_lines(sid, "main", "some rambling opener", "x"):
+                fh.write(json.dumps(entry) + "\n")
+        _, rows = core.build(
+            backend=StubZellij(DUMP), root=home.root,
+            processes=[proc.Process(900, 1, "claude")],
+            env_reader=lambda pid: {"ZELLIJ_PANE_ID": "2"} if pid == 900 else {},
+        )
+        self.assertEqual(rows[0].title, "checkout rewrite")
+        self.assertEqual(rows[0].description, "checkout rewrite")
+
     def test_notes_file_overrides_the_description(self):
         notes = os.path.join(self.home.root, "notes.json")
         with open(notes, "w") as fh:
@@ -604,7 +666,7 @@ class RestoreArtifactTests(unittest.TestCase):
     def setUp(self):
         self.home = FakeClaudeHome()
         self.addCleanup(self.home.close)
-        self.out = tempfile.mkdtemp(prefix="ccmux-out-")
+        self.out = tempfile.mkdtemp(prefix="panemap-out-")
         self.addCleanup(shutil.rmtree, self.out, True)
 
     def rows_for(self, backend, procs):
@@ -716,7 +778,7 @@ class VerifyTests(unittest.TestCase):
     def setUp(self):
         self.home = FakeClaudeHome()
         self.addCleanup(self.home.close)
-        self.dir = tempfile.mkdtemp(prefix="ccmux-verify-")
+        self.dir = tempfile.mkdtemp(prefix="panemap-verify-")
         self.addCleanup(shutil.rmtree, self.dir, True)
 
     def make_row(self, sid="11111111-1111-1111-1111-111111111111", **kwargs):

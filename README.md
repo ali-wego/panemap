@@ -1,16 +1,16 @@
-# ccmux
+# panemap
 
 Answers one question: **which Claude Code conversation is running in which terminal pane?**
 
 If you keep a dozen multiplexer tabs open with a long-running Claude Code
 session in each, that mapping lives only in your head. Reboot, and you are left
 guessing which of forty transcript ids belonged to the tab called `Tab #12`.
-`ccmux` reconstructs the mapping, describes each conversation in a line, and
+`panemap` reconstructs the mapping, describes each conversation in a line, and
 writes a file that rebuilds every pane with its `claude --resume <id>` already
 in place.
 
 ```
-$ ccmux list
+$ panemap list
 TAB               SESSION                                 AGE  WHAT IT IS
 ----------------  ------------------------------------  -----  ----------------------------------------
 checkout-rewrite  6f1a20c4-8d3e-4b17-9a55-0c2d81e4f7ab     2h  Rewriting the checkout form; PR open
@@ -23,7 +23,7 @@ deploy-notes      2d5c7b90-4e18-42fa-9c63-8b1a0f6d5e77    22h  Working out the s
   GONE = transcript deleted; cannot be resumed
 ```
 
-The first two rows are the same conversation open in two panes — `ccmux` spots
+The first two rows are the same conversation open in two panes — `panemap` spots
 that and restores it in one of them.
 
 Zero dependencies, standard library only.
@@ -31,27 +31,27 @@ Zero dependencies, standard library only.
 ## Install
 
 ```sh
-pipx install ccmux         # or: uv tool install ccmux / pip install --user ccmux
+pipx install panemap         # or: uv tool install panemap / pip install --user panemap
 ```
 
-Or just copy the package and run `python3 -m ccmux`.
+Or just copy the package and run `python3 -m panemap`.
 
 ## Commands
 
 | Command | What it does |
 |---|---|
-| `ccmux list` | The table above. `--json` for scripts, `--md` for a shareable sheet. |
-| `ccmux save` | Writes the recovery sheet, `sessions.json`, and a restore file. `--rescue` also captures every pane's screen. |
-| `ccmux doctor` | Reports what could cost you a conversation. Exits non-zero if anything is at risk. |
-| `ccmux verify` | Confirms each pane→session pairing from the pane's own screen contents. |
-| `ccmux rescue` | Captures every Claude pane's screen — the only backup for a session whose transcript is already deleted. |
-| `ccmux sessions` | Browses recent transcripts with a description each, whether or not a pane holds them. A readable `claude --resume` picker. |
+| `panemap list` | The table above. `--json` for scripts, `--md` for a shareable sheet. |
+| `panemap save` | Writes the recovery sheet, `sessions.json`, and a restore file. `--rescue` also captures every pane's screen. |
+| `panemap doctor` | Reports what could cost you a conversation. Exits non-zero if anything is at risk. |
+| `panemap verify` | Confirms each pane→session pairing from the pane's own screen contents. |
+| `panemap rescue` | Captures every Claude pane's screen — the only backup for a session whose transcript is already deleted. |
+| `panemap sessions` | Browses recent transcripts with a description each, whether or not a pane holds them. A readable `claude --resume` picker. |
 
-Run `ccmux save` before you reboot, then afterwards:
+Run `panemap save` before you reboot, then afterwards:
 
 ```sh
-zellij -n ~/.ccmux/restore.kdl      # zellij
-sh ~/.ccmux/restore.sh              # tmux
+zellij -n ~/.panemap/restore.kdl      # zellij
+sh ~/.panemap/restore.sh              # tmux
 ```
 
 Every pane comes back with its resume command **typed but not run**, so
@@ -60,9 +60,22 @@ in the ones you want.
 
 ### Naming your sessions
 
-The default description is the conversation's opening message, which is often
-not what the conversation became. Put your own labels in
-`~/.ccmux/notes.json`, keyed by session id:
+Without a name, the description falls back to the conversation's opening
+message — often not what the conversation became. The best fix is Claude Code's
+own naming, because it pays off in more than one place:
+
+```sh
+claude -n "checkout rewrite"      # also shown in /resume and the terminal title
+```
+
+`panemap` reads that name and prefers it over the opening message. It comes from
+the `custom-title` record in the transcript, so it survives the process exiting
+— a session dormant for weeks still knows what it was called. Claude Code also
+derives a throwaway name for every session (`myproject-0a`); those are ignored,
+since they say less than the opening message does.
+
+For sessions you would rather not rename, `~/.panemap/notes.json` overrides
+anything else, keyed by session id:
 
 ```json
 {
@@ -70,11 +83,12 @@ not what the conversation became. Put your own labels in
 }
 ```
 
-These survive regeneration, and `ccmux list --json` will hand you the ids.
+So the order is: your note, then the session's name, then its opening message.
+`panemap list --json` will hand you the ids.
 
 ## How the mapping is worked out
 
-No multiplexer records "this pane runs that Claude session", so `ccmux`
+No multiplexer records "this pane runs that Claude session", so `panemap`
 triangulates.
 
 1. **The session registry.** Each running Claude Code process writes
@@ -86,7 +100,7 @@ triangulates.
    `ZELLIJ_PANE_ID` in its environment, and pane ids ascend with creation, so
    sorting processes by pane id lines them up with `dump-layout` order.
 3. **Corroboration.** Because step 2 is an assumption on zellij, each row is
-   graded and the reasons are printed by `ccmux verify`:
+   graded and the reasons are printed by `panemap verify`:
    - a pane launched as `claude --resume <id>` must agree with the registry —
      if it does not, the row is marked `conflict` rather than quietly reported;
    - a registry file's mtime should match its transcript's last entry, since
@@ -102,7 +116,7 @@ Anything not confirmed is marked `~` in the table rather than presented as fact.
 **Transcripts are deleted after 30 days.** `cleanupPeriodDays` defaults to 30,
 cleanup runs at startup and goes by file mtime, so a session you have not
 touched in a month becomes unresumable *while its process is still running* —
-the conversation then exists only in memory. `ccmux doctor` flags this before it
+the conversation then exists only in memory. `panemap doctor` flags this before it
 happens. Raise the limit in `~/.claude/settings.json`:
 
 ```json
@@ -110,7 +124,7 @@ happens. Raise the limit in `~/.claude/settings.json`:
 ```
 
 If a transcript is already gone, `/export` in that pane is the only way to save
-the history; `ccmux rescue` at least keeps the visible screen.
+the history; `panemap rescue` at least keeps the visible screen.
 
 **`zellij --layout` is not `zellij -n`.** Run inside an existing session,
 `--layout` *adds* the tabs to the session you are already in. `-n`
@@ -119,7 +133,7 @@ so at the top.
 
 **The branch in Claude's status line means nothing.** It shows the branch as of
 the pane's last redraw, not the branch the conversation was on. Comparing it
-against a transcript produces convincing false mismatches. `ccmux` ignores it.
+against a transcript produces convincing false mismatches. `panemap` ignores it.
 
 ## Support
 
@@ -144,7 +158,7 @@ introspection wired up yet), and Claude Code builds old enough not to write
 - A session open in two panes is restored in one — the pane that drove it most
   recently. Resuming one transcript twice interleaves both conversations into
   the same file.
-- `ccmux` never writes to your transcripts or sends input to a pane. `rescue`
+- `panemap` never writes to your transcripts or sends input to a pane. `rescue`
   and `verify` only read pane screens.
 
 ## Development

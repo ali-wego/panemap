@@ -33,6 +33,9 @@ DEFAULT_CLEANUP_DAYS = 30
 TAIL_BYTES = 4_000_000
 #: How many leading lines to scan for the opening message.
 HEAD_LINES = 4000
+#: Leading lines always scanned for a startup ``customTitle``, even after the
+#: opening message has been found.
+TITLE_WINDOW = 60
 
 
 def config_dir() -> str:
@@ -68,6 +71,18 @@ class Registry:
     #: mtime of the registry file itself - tracks the session's last activity
     #: closely enough to cross-check the transcript, and needs no parsing.
     file_mtime: float
+    #: Display name, and where it came from. Claude Code derives a throwaway
+    #: name (``myproject-0a``) for every session, so only a name whose source
+    #: is *not* "derived" was actually chosen by the user and worth showing.
+    name: Optional[str] = None
+    name_source: Optional[str] = None
+
+    @property
+    def chosen_name(self) -> Optional[str]:
+        """The name only if a person set it, never Claude's derived one."""
+        if self.name and self.name_source and self.name_source != "derived":
+            return self.name
+        return None
 
     @property
     def interactive(self) -> bool:
@@ -105,6 +120,8 @@ def read_registry(root: Optional[str] = None) -> Dict[int, Registry]:
             version=data.get("version"),
             updated_at=data.get("updatedAt") or 0,
             file_mtime=mtime,
+            name=data.get("name"),
+            name_source=data.get("nameSource"),
         )
     return out
 
@@ -167,6 +184,11 @@ def squeeze(text: str, limit: int = 150) -> str:
 class Transcript:
     path: str
     size: int
+    #: Name given with ``claude -n <name>`` (or a later rename). Recorded as a
+    #: ``custom-title`` entry and absent unless someone actually set one, which
+    #: makes it a trustworthy label -- and unlike the registry it survives the
+    #: process exiting, so a dormant session still knows what it was called.
+    title: Optional[str] = None
     opened_with: Optional[str] = None
     last_message: Optional[str] = None
     branch: Optional[str] = None
@@ -202,7 +224,7 @@ def scan_transcript(path: str, limit: int = 150) -> Transcript:
     seen_ids: List[str] = []
 
     with open(path, "rb") as fh:
-        for _ in range(HEAD_LINES):
+        for index in range(HEAD_LINES):
             line = fh.readline()
             if not line:
                 break
@@ -210,11 +232,17 @@ def scan_transcript(path: str, limit: int = 150) -> Transcript:
             if entry is None:
                 continue
             result.branch = result.branch or entry.get("gitBranch")
+            result.title = entry.get("customTitle") or result.title
             sid = entry.get("sessionId")
             if sid and sid not in seen_ids:
                 seen_ids.append(sid)
             if result.opened_with is None and _is_human_turn(entry):
                 result.opened_with = squeeze(_entry_text(entry), limit)
+            # A name given at startup is recorded near the top, so stop once
+            # the opening message is in hand and that window has passed. A name
+            # set later in the conversation is picked up by the tail scan
+            # instead of by reading the whole file.
+            if result.opened_with and index >= TITLE_WINDOW:
                 break
 
         fh.seek(max(0, size - TAIL_BYTES))
@@ -225,6 +253,7 @@ def scan_transcript(path: str, limit: int = 150) -> Transcript:
             if entry is None:
                 continue
             result.branch = entry.get("gitBranch") or result.branch
+            result.title = entry.get("customTitle") or result.title
             result.last_activity = _parse_ts(entry.get("timestamp")) or result.last_activity
             sid = entry.get("sessionId")
             if sid and sid not in seen_ids:

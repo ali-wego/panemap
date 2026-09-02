@@ -16,7 +16,7 @@ from typing import List, Optional, Tuple
 from . import core, mux
 
 ZELLIJ_HEADER = """\
-// Rebuilt by ccmux -- restores each pane's Claude session.
+// Rebuilt by panemap -- restores each pane's Claude session.
 //
 //   zellij -n {path}
 //
@@ -60,10 +60,10 @@ def _tmux(snapshot, rows, out_dir):
     windows are not reproduced.
     """
     path = os.path.join(out_dir, "restore.sh")
-    name = "ccmux"
+    name = "panemap"
     lines = [
         "#!/bin/sh",
-        "# Rebuilt by ccmux -- restores each pane's Claude session.",
+        "# Rebuilt by panemap -- restores each pane's Claude session.",
         "#   sh %s   then:  tmux attach -t %s" % (_tilde(path), name),
         "# Each pane has its resume command typed but NOT run; press Enter.",
         "set -e",

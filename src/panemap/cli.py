@@ -11,7 +11,7 @@ from typing import List, Optional
 
 from . import claude, core, mux, render, restore, verify
 
-HOME_DIR = os.path.join(os.path.expanduser("~"), ".ccmux")
+HOME_DIR = os.path.join(os.path.expanduser("~"), ".panemap")
 NOTES_FILE = os.path.join(HOME_DIR, "notes.json")
 
 DESCRIPTION = """\
@@ -22,7 +22,7 @@ and rebuild them after a reboot.
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="ccmux", description=DESCRIPTION,
+        prog="panemap", description=DESCRIPTION,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
@@ -143,7 +143,7 @@ def _save(backend, snapshot, rows, args) -> int:
         )
     risks = [f for f in findings if f.level == "risk"]
     if risks:
-        print("\n%d risk(s) found - run `ccmux doctor`" % len(risks))
+        print("\n%d risk(s) found - run `panemap doctor`" % len(risks))
     return 0
 
 
@@ -208,7 +208,12 @@ def _sessions(args) -> int:
     print("%d transcript(s)%s\n" % (len(scanned), "" if args.all else " in " + project))
     for transcript in scanned[: args.limit]:
         sid = os.path.basename(transcript.path)[:-6]
-        desc = notes.get(sid) or transcript.opened_with or "(no readable message)"
+        desc = (
+            notes.get(sid)
+            or transcript.title
+            or transcript.opened_with
+            or "(no readable message)"
+        )
         room = max(20, width - 66)
         if len(desc) > room:
             desc = desc[: room - 1] + "…"

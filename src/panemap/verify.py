@@ -36,7 +36,7 @@ MIN_PROMPT = 15
 
 def capture(backend: mux.Backend, rows: List[core.Row], out_dir: Optional[str] = None):
     """Dump every pane's screen. Returns ``{pane key: file path}``."""
-    target = out_dir or tempfile.mkdtemp(prefix="ccmux-verify-")
+    target = out_dir or tempfile.mkdtemp(prefix="panemap-verify-")
     os.makedirs(target, exist_ok=True)
     dumps: Dict[str, str] = {}
     for row in rows:

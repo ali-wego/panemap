@@ -71,7 +71,7 @@ def table(rows: List[core.Row], snapshot: mux.Snapshot, width: Optional[int] = N
     if any(r.confidence == core.LIKELY for r in rows):
         footnotes.append("~ pairing inferred from pane order, not confirmed")
     if any(r.confidence == core.CONFLICT for r in rows):
-        footnotes.append("! pane and registry disagree - see `ccmux doctor`")
+        footnotes.append("! pane and registry disagree - see `panemap doctor`")
     if any(not r.resumable for r in rows):
         footnotes.append("GONE = transcript deleted; cannot be resumed")
     if footnotes:
@@ -96,6 +96,7 @@ def as_json(rows: List[core.Row], snapshot: mux.Snapshot) -> str:
                 "pid": row.pane.pid,
                 "session_id": row.session_id,
                 "cwd": row.cwd,
+                "title": row.title,
                 "branch": row.transcript.branch if row.transcript else None,
                 "transcript": row.transcript.path if row.transcript else None,
                 "transcript_mb": row.transcript.megabytes if row.transcript else None,
